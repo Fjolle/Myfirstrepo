@@ -1,0 +1,17 @@
+---
+title: "Newrmarkdown"
+author: "Fjolle Gjonbalaj"
+date: "22 January 2021"
+output: html_document
+---
+## Remember to add rmarkdown as a package/ This can be done by going into Packages and ticking rmarkdown or by typing library(rmarkdown)
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r}
+Pcomp=lm(GasPrices$Price~GasPrices$Competitors) # TRUE
+summary(Pcomp)
+boxplot(Price~Competitors,data=GasPrices)
+```
