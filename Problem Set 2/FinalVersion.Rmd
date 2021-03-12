@@ -1,0 +1,464 @@
+---
+title: "Final Version of the Second Assignment"
+author: "Fjolle Gjonbalaj"
+date: "12/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(rmarkdown)
+library(ggplot2)
+library(tidyverse)
+library(rsample)
+library(caret)
+library(modelr)
+library(parallel)
+library(kableExtra)
+library(gamlr)
+library(foreach)
+library(hrbrthemes)
+library(FNN)
+library(lubridate)
+library(mosaic)
+library(class)
+library(FNN)
+library(dplyr)
+library(knitr)
+library(data.table)
+library(jtools)
+library(workflows)
+library(parsnip)
+library(aod)
+library(ModelMetrics)
+library(recipes)
+library(pROC)
+library(foreach)
+library(MASS)
+
+CapMetro<-read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/capmetro_UT.csv')
+```
+
+PROBLEM 1
+
+```{r}
+CapMetro1 = mutate(CapMetro,
+                     day_of_week = factor(day_of_week,
+                                          levels=c("Mon", "Tue", "Wed","Thu", "Fri", "Sat", "Sun")),
+                     month = factor(month,
+                                    levels=c("Sep", "Oct","Nov")))
+```
+
+```{r, message=FALSE, warning=FALSE}
+  CapMetro1 %>%
+  group_by(hour_of_day, day_of_week, month) %>%
+  mutate(avgboard = mean(boarding)) %>%
+  ungroup() %>%  ggplot() +
+  geom_line(aes(x = hour_of_day, y = avgboard, color = month)) +
+  scale_x_continuous(limits = c(0, 24),breaks = seq(4, 24, 4)) +
+  scale_y_continuous(expand = c(0,0), limits = c(0, 200)) +
+  scale_color_ft("Month") +
+  facet_wrap(~ day_of_week, scales = "free") + 
+  labs(x = "Hour of day", y = "Average boarding",
+       title = "Average bus ridership in the UT area",
+       caption = "Data from Capital Metro")+
+  theme_minimal()
+```
+
+The panel of line graphs shows the average bus ridership in the UT area grouped 
+by hour of day, day of week and month I facet by day of week to check whether 
+or not the hour of peak boardings changes from day to day. I observe that 
+the hour of peak boardings is fairly similar across week days, but on Saturdays
+and Sundays this peak boarding hour is quite rather constant and similar throughout 
+the day.From the line graphs it can be observed that average boardings on Mondays in 
+September are lower, compared to other days and months. This is likely due to the
+Labor day being a day off on September 7th. On the other hand, Austin does not have any 
+Federal Holidays on Mondays during the October and November months.
+Similarly, I observe that average boardings on Wednesday, Thursday and Friday on
+November is lower than for other months.  This is likely due to Veteran's day, 
+Thanksgiving day and Day after Thanksgiving being days off. 
+
+```{r, message=FALSE, warning=FALSE}
+ CapMetro1 %>%
+    group_by(timestamp, hour_of_day) %>%
+    mutate(avg_boarding = mean(boarding)) %>%
+    ggplot() +
+    geom_point(aes(x = temperature, y = avg_boarding, color = weekend)) +
+    scale_x_continuous(limits = c(40, 100), 
+                       breaks = seq(30, 90, 30)) +
+    scale_y_continuous(limits = c(0, 240)) +
+    scale_color_ft() +
+    facet_wrap(. ~ hour_of_day, scales = "free") +  
+    labs(x = "Temperature", y = "Boarding",
+         title = "Average bus ridership in the UT area by temperature",
+         caption = "Data from Capital Metro") +
+   theme_minimal()
+```
+
+I use a facet of scatter plots to show the effect of temperature (x) on average bus ridership in the UT area. 
+I facet by hour of the day, with points colored according to whether it is a weekday or weekend. I aim to show
+whether or not temperature has a noticeable effect on the number of UT students riding the bus. I do not
+observe any noticeable effects of temperature on ridership, regardless of whether it is a weekday
+or a weekend. 
+
+PROBLEM 2
+
+```{r}
+data(SaratogaHouses)
+
+x=matrix(c("Benchmark Model  (Medium Model)", 
+            "price = lotSize + age + livingArea + pctCollege + bedrooms + fireplaces+bathrooms + rooms + heating + fuel + centralAir", 
+            "Price Model  (Manually Built Model)", 
+            "price = rooms + bathrooms + bathrooms*rooms + lotSize + newConstruction+livingArea + livingArea*rooms + lotSize * livingArea + pctCollege + heating + fuel + livingArea * (heating + fuel) + centralAir + waterfront",
+            "Price Model 2 (Forward Selected Model)",
+            "price = livingArea + landValue + bathrooms + waterfront + newConstruction + heating + lotSize + age + centralAir + rooms + bedrooms + landValue * newConstruction + bathrooms * heating + livingArea * bathrooms + lotSize * age + livingArea * waterfront + landValue * lotSize + livingArea * centralAir + age * centralAir + livingArea * landValue + bathrooms * bedrooms + bathrooms * waterfront + heating * bedrooms + heating * rooms + waterfront * centralAir + waterfront * lotSize + landValue * age + age * rooms + livingArea * lotSize + lotSize * rooms + lotSize * centralAir",
+            "Price Model 3 (Forward Selected Model)",
+            "price = livingArea + bathrooms + waterfront + newConstruction + heating+lotSize + age + centralAir + rooms + bedrooms + bathrooms * heating + livingArea * bathrooms + lotSize * age + livingArea * waterfront + livingArea * centralAir + age * centralAir + bathrooms * bedrooms + bathrooms * waterfront + heating * bedrooms + heating * rooms + waterfront * centralAir + waterfront * lotSize + age * rooms+livingArea * lotSize + lotSize * rooms + lotSize * centralAir")
+          , nrow=8, ncol=1)
+ kable(x, caption="**Table 1.1 : Models With Price As the Target Variable**")%>%
+   kable_styling(position="center", full_width = NULL)
+```
+
+```{r}
+ rmse = function(y, yhat) {
+   sqrt( mean( (y - yhat)^2 ) )}
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+ LoopRMSE = do(100)*{
+   n = nrow(SaratogaHouses)
+   n_train = round(0.8*n) 
+   n_test = n - n_train
+   train_cases = sample.int(n, n_train, replace=FALSE)
+   test_cases = setdiff(1:n, train_cases) 
+   saratoga_train = SaratogaHouses[train_cases,]
+   saratoga_test = SaratogaHouses[test_cases,]
+   
+   lm_medium = lm(price ~ lotSize + age + livingArea + pctCollege + bedrooms + 
+                    fireplaces + bathrooms + rooms + heating + fuel + centralAir, data=saratoga_train)
+   #improved model for price that includes land value 
+   lm_price = lm(price ~ rooms + bathrooms + bathrooms*rooms  + lotSize + newConstruction
+                 + livingArea + livingArea*rooms + lotSize*livingArea + pctCollege + heating + fuel 
+                 +livingArea*(heating + fuel) + centralAir + waterfront
+                 ,data=saratoga_train)
+   
+   lm_price1 = lm(price ~ livingArea + landValue + bathrooms + waterfront + newConstruction + 
+                    heating + lotSize + age + centralAir + rooms + bedrooms + 
+                    landValue:newConstruction + bathrooms:heating + livingArea:bathrooms + 
+                    lotSize:age + livingArea:waterfront + landValue:lotSize + 
+                    livingArea:centralAir + age:centralAir + livingArea:landValue + 
+                    bathrooms:bedrooms + bathrooms:waterfront + heating:bedrooms + 
+                    heating:rooms + waterfront:centralAir + waterfront:lotSize + 
+                    landValue:age + age:rooms + livingArea:lotSize + lotSize:rooms + 
+                    lotSize:centralAir, data=saratoga_train)
+   
+   
+   lm_price2 = lm(price ~ livingArea +  bathrooms + waterfront + newConstruction + heating + lotSize + age +
+                    centralAir + rooms + bedrooms + bathrooms:heating + livingArea:bathrooms + 
+                    lotSize:age + livingArea:waterfront +  livingArea:centralAir + age:centralAir  + 
+                    bathrooms:bedrooms + bathrooms:waterfront + heating:bedrooms + heating:rooms + 
+                    waterfront:centralAir + waterfront:lotSize + age:rooms + livingArea:lotSize + lotSize:rooms + 
+                    lotSize:centralAir
+                  ,data=saratoga_train)
+   
+   
+   
+   yhat_test_medium = predict(lm_medium, saratoga_test)
+   yhat_test_price = predict(lm_price, saratoga_test)
+   yhat_test_price1 = predict(lm_price1, saratoga_test)
+   yhat_test_price2 = predict(lm_price2, saratoga_test)
+   
+   
+   c(RmseMedium=rmse(saratoga_test$price, yhat_test_medium), 
+     rmsePrice =rmse(saratoga_test$price, yhat_test_price), 
+     RmsePrice1 = rmse(saratoga_test$price, yhat_test_price1),
+     RmsePrice2 = rmse(saratoga_test$price, yhat_test_price2)) 
+   
+ }
+ RMSEMean = rbind("Baseline Model 1 " = mean(LoopRMSE$RmseMedium), 
+                  "Price Model 1 " = mean(LoopRMSE$rmsePrice), 
+                  "Price Model 2 " = mean(LoopRMSE$RmsePrice1),
+                  "Price Model 2.1 " = mean(LoopRMSE$RmsePrice2))
+ kable(RMSEMean, caption="**Table 1.2 : RMSE for Price Models of Step 1**")%>%
+   kable_styling(full_width = FALSE)%>%
+   column_spec(1, width = "10em")
+
+```
+
+Here I attempt at building the best linear model for price from the benchmark 
+model specified in the very first lines of the code by including several
+interaction variables and features that have an effect on price. 
+I obtain repeated results that the Price Model 2 is the best linear model and it
+beats the benchmark model by a significant amount by having a significantly lower rmse. 
+
+
+KNN regression
+
+```{r, message=FALSE, echo=FALSE, warning= FALSE}
+
+saratoga_split = initial_split(SaratogaHouses, prop = 0.8)
+saratoga_train = training(saratoga_split)
+saratoga_test = testing(saratoga_split)
+saratoga_folds = crossv_kfold(SaratogaHouses, k=20)
+medium = map(saratoga_folds$train, ~ lm(price ~ . - pctCollege - sewer - waterfront - landValue - newConstruction, data=.))
+best = map(saratoga_folds$train, ~ lm(price ~ livingArea + landValue + bathrooms + waterfront + newConstruction + 
+                                        heating + lotSize + age + centralAir + rooms + bedrooms + 
+                                        landValue:newConstruction + bathrooms:heating + livingArea:bathrooms + 
+                                        lotSize:age + livingArea:waterfront + landValue:lotSize + 
+                                        livingArea:centralAir + age:centralAir + livingArea:landValue + 
+                                        bathrooms:bedrooms + bathrooms:waterfront + heating:bedrooms + 
+                                        heating:rooms + waterfront:centralAir + waterfront:lotSize + 
+                                        landValue:age + age:rooms + livingArea:lotSize + lotSize:rooms + 
+                                        lotSize:centralAir, data=.))
+```
+
+Mean rmse for the medium model :
+
+```{r, message=FALSE, echo=FALSE} 
+
+map2_dbl(medium, saratoga_folds$test, modelr::rmse) %>% mean
+```
+
+Mean rmse for the best linear model: 
+
+
+```{r, message=FALSE, echo=FALSE} 
+
+map2_dbl(best, saratoga_folds$test, modelr::rmse) %>% mean
+```
+
+```{r, message=FALSE, echo=FALSE, warning = FALSE} 
+
+#re-scaling 
+saratoga_scale= SaratogaHouses %>%
+  mutate(across(c(lotSize, age, landValue, livingArea, pctCollege, bedrooms, fireplaces, bathrooms, rooms), scale))
+#For rescaled data
+saratoga_scale_split = initial_split(saratoga_scale, prop = 0.8)
+saratoga_scale_train = training(saratoga_scale_split)
+saratoga_scale_test = testing(saratoga_scale_split)
+saratoga_scale_folds = crossv_kfold(saratoga_scale, k=20)
+
+```
+
+Mean rmse with k nearest neighbors :
+
+```{r, message=FALSE, echo=FALSE, warning = FALSE} 
+
+k_grid = c(2, 5, 10, 20, 50, 75, 100, 150, 200)
+cv_grid = foreach(k= k_grid, .combine= 'rbind') %dopar% {
+  modelk = map(saratoga_scale_folds$train, ~knnreg(price~ lotSize + age + landValue + livingArea + bedrooms + fireplaces + bathrooms + rooms + heating + fuel + centralAir, k = k, data =. , use.all=FALSE))
+  RMSE = map2_dbl(modelk, saratoga_scale_folds$test, modelr::rmse)
+  c(k=k, RMSE = mean(RMSE))
+} %>% as.data.frame
+cv_grid
+```
+
+In comparison to the linear models with price as a target variable, the price KNN
+regression has a higher minimum average out-of-sample RMSE for some K values.
+The linear regression model is better than the KNN model at predicting market values. 
+ 
+
+PROBLEM 3
+
+```{r}
+GermanCredit<-read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/german_credit.csv")
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+GermanCredit %>%
+  group_by(Default, history) %>%
+  add_tally() %>%
+  rename(num_default = n) %>%
+  distinct(history, num_default) %>%
+  ungroup() %>%
+  group_by(history) %>%
+  mutate(tot_default = sum(num_default),
+         prob_default = (num_default / tot_default) * 100) %>%
+  filter(Default == 0) %>%
+  ggplot() + geom_col(aes(x = history, y = prob_default,
+               fill = history))  +scale_x_discrete(labels = c("Good", "Poor", "Terrible")) +
+  labs(x = "History", y = "Probability of Default") +  theme_minimal()
+
+```
+
+The outcome variable of interest in this data set is default: a 0/1 indicator variable
+for whether or not a loan fell into default at some point before it was paid back to the bank.
+Of particular interest here is the "credit history" variable (history), in which a 
+borrower's credit rating is classified as "Good", "Poor," or "Terrible." 
+
+I make a bar plot to show the probability of default by credit history. The bar plot shows what we would
+expect to see. That is, the probability of of default is lower for individuals with a credit history
+classified as "Good", higher for individuals with a "Poor" credit history, and highest for those with 
+a "Terrible" credit history. 
+
+
+```{r, message=FALSE, warning=FALSE}
+credit_split <- initial_split(GermanCredit, strata = "Default", prop = 0.8)
+credit_train <- training(credit_split)
+credit_test  <- testing(credit_split)
+
+LogisticModel <- glm(Default ~ duration + amount + installment+history + age + purpose + foreign , family=binomial, data = credit_train)
+summary(LogisticModel)
+```
+
+
+Further, I build a logistic regression model for predicting default probability, using the variables duration + amount +
+installment + age + history + purpose + foreign. We see that the history variable predicting results
+is highly significant. On the other hand, the purpose of the borrowing as well as whether the individual is foreign
+or German are not significant and could potentially be dropped from the model. 
+
+The data does not seem to be entirely appropriate for predicting default loans. 
+This is mainly because the data set that is being used is not representative of all loans but rather 
+a number of defaults. The risk of using such data is that the bank runs the risk
+of misclassifying individuals with a very bad credit history on being good candidates
+for future loans. 
+
+
+PROBLEM 4
+
+
+```{r}
+hotels<-read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/hotels_dev.csv")
+head(hotels)
+
+
+hotels_val<-read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/hotels_val.csv")
+head(hotels_val)
+```
+
+The files hotels_dev.csv and hotels_val.csv contains data on tens of thousands of hotel stays
+from a major U.S.-based hotel chain. The goal of this problem is simple: to build a predictive 
+model for whether a hotel booking will have children on it.
+
+The target variable of interest is children: a dummy variable for whether the booking 
+has children on it.
+
+```{r}
+#MODEL BUIDING
+
+hotels_split = initial_split(hotels, prop = 0.8)
+hotels_train = training(hotels_split)
+hotels_test = testing(hotels_split)
+
+```
+
+Below you can see a logit model, regressed on market segment, adults, customer type, and repeated guest status.
+
+```{r echo = TRUE, message = FALSE}
+
+base1 = glm(children~market_segment+adults+customer_type+is_repeated_guest, data = hotels_train)
+logit_hotels = predict(base1, hotels_test, type='response')
+test_logit_hotels = ifelse(logit_hotels > 0.5, 1, 0)
+confusion_out_base1 = table(y = hotels_test$children,
+                            yhat = test_logit_hotels)
+confusion_out_base1
+sum(diag(confusion_out_base1))/sum(confusion_out_base1)
+```
+
+This model has an accuracy rate of ~93% according to a probability threshold of 0.5.
+
+
+The second base model uses a logistic regression to predicts children based on all other variables except arrival date.
+
+```{r message = FALSE, echo = TRUE}
+
+base2 = glm(children ~ . - arrival_date, data = hotels_train)
+logit_hotels = predict(base2, hotels_test, type='response')
+test_logit_hotels = ifelse(logit_hotels > 0.5, 1, 0)
+confusion_out_base2= table(y = hotels_test$children,
+                            yhat = test_logit_hotels)
+confusion_out_base2
+sum(diag(confusion_out_base2))/sum(confusion_out_base2)
+```
+
+Using only the data in hotels.dev.csv, I compare the out-of-sample performance of the
+ following models:
+baseline 1: a small model that uses only the market_segment, adults, customer_type, and 
+is_repeated_guest variables as features. 
+baseline 2: a big model that uses all the possible predictors except the arrival_date variable
+(main effects only). Moreover, I build two additional models with different interactions
+and engineering features to improve the performance. 
+
+The latter model shows a slightly better accuracy rate than the former model. Hence, adding more variables proved to be beneficial. 
+
+
+In the following model I use the lasso method to decide what variables to use in a linear model.
+
+```{r message = FALSE, echo = TRUE}
+
+modmat = model.matrix(children ~ .-1, data=hotels) # do -1 to drop intercept!
+child = hotels$children
+cv = cv.gamlr(modmat, child, nfold = 20, family="binomial")
+scbeta = coef(cv)
+base3 = lm(children~ hotel+lead_time+adults+meal+market_segment+distribution_channel+
+                 is_repeated_guest+previous_bookings_not_canceled+reserved_room_type+
+                 booking_changes+customer_type+average_daily_rate+total_of_special_requests+
+                 arrival_date, data = hotels)
+logit_hotels = predict(base3, hotels_test, type='response')
+test_logit_hotels = ifelse(logit_hotels > 0.5, 1, 0)
+confusion_out_base3 = table(y = hotels_test$children,
+                            yhat = test_logit_hotels)
+confusion_out_base3
+sum(diag(confusion_out_base3))/sum(confusion_out_base3)#out-of-sample accuracy
+```
+
+Among the three models, the best performing is the linear model. It shows an accuracy rate of approximately 93.1%. Accordingly, I will use the following variables: hotel, lead_time, adults, meal, market_segment, distribution_channel, is_repeated_guest, previous_bookings_not_canceled, reserved_room_type, booking_changes, customer_type, average_daily_rate, total_of_special_requests, and arrival_date. 
+
+
+### Validation Step 1
+
+Predicting outcomes of the validation data set with my best model:
+
+```{r echo = FALSE, message=FALSE, warning = FALSE}
+hotels_val_split =  initial_split(hotels_val, prop=0.8)
+hotels_val_train = training(hotels_val_split)
+hotels_val_test  = testing(hotels_val_split)
+
+#For my best pick
+test_base3 = predict(base3, hotels_val_test, type='response')
+thresh_grid = seq(0.15, 0.05, by=-0.001)
+roc_curve_hotels = foreach(thresh = thresh_grid, .combine='rbind') %do% {
+  test_v = ifelse(test_base3 >= thresh, 1, 0)
+  # FPR, TPR for linear model
+  confusion_out_v = table(y = hotels_val_test$children, yhat = test_v)
+  out_lin = data.frame(model = "linear",
+                       TPR = confusion_out_v[2,2]/sum(hotels_val_test$children==1),
+                       FPR = confusion_out_v[1,2]/sum(hotels_val_test$children==0))
+  rbind(out_lin)
+} %>% as.data.frame()
+ggplot(roc_curve_hotels) + 
+  geom_line(aes(x=FPR, y=TPR)) + 
+  labs(title="ROC curve") +
+  theme_bw(base_size = 10)+
+  xlim(0.1, 0.3)+
+  ylim(0.6,1)
+```
+
+After I have built the best model and assessed its out-of-sample performance using hotels_dev, 
+now I turn to the data in hotels_val. I validate the model using this entirely fresh 
+subset of the data, i.e. one that wasn't used to fit OR test as part of the model-building stage.
+
+
+ Model Validation: Step 2 
+ 
+
+```{r echo = FALSE, message=FALSE }
+
+fold_id = sample(fold_id, replace=FALSE) # permute the order randomly
+base3hand_val = lm(children~ hotel+lead_time+adults+meal+market_segment+distribution_channel+is_repeated_guest+
+                     previous_bookings_not_canceled+reserved_room_type+booking_changes+customer_type+average_daily_rate+ total_of_special_requests+arrival_date, data = hotels_val)
+hotels_val_folds <- hotels_val %>%
+  mutate(fold_id = sample(fold_id, replace=FALSE), phat_val_test = predict(base3hand_val, hotels_val, type='response'), yhat_val_test = ifelse(phat_val_test > 0.5, 1, 0)) #%>%
+fold_groups <- hotels_val_folds%>%
+  group_by(fold_id)%>%
+  summarize(prop_children = mean(children), prop_pred = mean(phat_val_test), count_children = sum(children), count_pred = sum(yhat_val_test), count_dif = count_children-count_pred)
+ggplot(data = fold_groups)+
+  geom_point(aes(x=fold_id, y=count_dif))+
+  xlab('Fold id')+
+  ylab('Difference Between Predicted and Observed Outcomes for Children')
+```
+
+The boxplot shows the Difference between predicted and observed outcomes for children for each fold.  
+There is quite a big difference among folds. This suggests that even our best model
+cannot consistently predict whether or not a child shows up unexpectedly across randomized observations.
