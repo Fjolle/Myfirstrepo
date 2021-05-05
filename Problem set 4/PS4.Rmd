@@ -17,7 +17,7 @@ library(foreach)
 library(data.table)
 ```
 
-# Problem 1: Clustering and PCA
+# Question 1: Clustering and PCA
 
 This problem compares unsupervised learning methods like Principal Component Analysis and K-means clustering to find out whether or not they can successfully distinguish the red wine from the white wine, as well as sorting the higher from the lower quality of wine based on the dataset with 11 chemical properties (or suitable transformations thereof) of 6500 different bottles of vinho verde wine from northern Portugal. 
 
@@ -206,7 +206,163 @@ K-means clustering on the first five principal components is used to check wheth
 To conclude, neither K-means clustering nor PCA successfully differentiate the higher from the lower quality wines using only unsupervised learning contained on chemical properties of wine. Nevertheless, reducing the dimensions of the features by PCA and then applying K-means clustering could make the successful distinction on the quality levels of wine which could be observed from the reduced within-cluster sum of squares. Hence, K-means clustering together with PCA on the chemical components of wine work more successfully to differentiate between wine color than when we compare them based on the wine quality. 
 
 
+#Question 2:  Market segmentation
+
+# K-means
+
+```{r , warning=FALSE, echo=FALSE}
+social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
+socialmarketing=filter(social_marketing, social_marketing$spam == 0 & social_marketing$adult == 0)
+soc_market = socialmarketing[ , c(-1, -36, -37)]
+soc_market=soc_market/rowSums(soc_market)
+soc_markets=scale(soc_market, center = TRUE, scale = TRUE)
+Ns = nrow(soc_markets)
+k_grid = seq(1, 10, by=1)
+grids = foreach(k = k_grid, .combine='c') %do% {
+  cluster_ks = kmeans(soc_markets, k, nstart=25)
+  With = cluster_ks$within
+  Bet = cluster_ks$between
+  CH = (Bet/With)*((Ns-k)/(k-1))
+}
+plot(k_grid,elbow.obj=NULL,xlab="k",
+ylab="Explained_Variance",type="b",pch=20,col.abline="red",
+lty.abline=3,if.plot.new=TRUE,print.info=TRUE,
+mar=c(4,5,3,3),omi=c(0.75,0,0,0))
+```
+
+The figure above shows the elbow plot. It is not clear from the graph what the appropriate elbow is.
+
+### The Result of K-means
+
+```{r ,  warning=FALSE, echo=FALSE}
+social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
+socialmarketing=filter(social_marketing, social_marketing$spam == 0 & social_marketing$adult == 0)
+soc_market = socialmarketing[ , c(-1, -36, -37)]
+soc_market=soc_market/rowSums(soc_market)
+soc_markets=scale(soc_market, center = TRUE, scale = TRUE)
+set.seed(1)
+clust_k= kmeans(soc_markets, 10, nstart=20)
+result=data.frame(clust_k$cluster)
+resultCombinedData=cbind(soc_market, result$clust_k.cluster)
+table_kmeans=data.frame("Cluster"=character(11))
+for (i in 1:10) {
+  Cluster = filter(resultCombinedData, result$clust_k.cluster == i)
+  ClusterMeans = as.data.table(colMeans(Cluster), keep.rownames=TRUE)
+  colnames(ClusterMeans) <- c("Categories", "Cluster Means")
+  ClusterMeans = ClusterMeans[order(-`Cluster Means`)]
+  ClusterMeans = ClusterMeans[1:10,1]
+  c=data.frame(nrow(Cluster))
+  ClusterMeans=rbind(ClusterMeans,c, use.names=FALSE)
+  table_kmeans=cbind(table_kmeans, ClusterMeans)
+}
+table_kmeans=table_kmeans[-1, -1]
+table_kmeans=transpose(table_kmeans)
+table_kmeans=table_kmeans[order(table_kmeans[, ncol(table_kmeans)], decreasing = TRUE),]
+rownames(table_kmeans)=c("Cluster a", "Cluster b", "Cluster c", "Cluster d", "Cluster e", "Cluster f", "Cluster g", "Cluster h", "Cluster i", "Cluster j")
+colnames(table_kmeans)=c("Category a", "Category b", "Category c", "Category d", "Category e",
+                         "Consumer_no.")
+kable(table_kmeans, caption ="Clusters of K-means" ,format_caption = c("bold", "underline")) %>%
+  kable_styling(bootstrap_options = "basic", full_width = F)
+```
+
+K-means gave stable clusters of consumers. For each cluster, the sum of frequencies for each category over all consumers in that cluster is calculated. After ordering the categories by sums of frequencies, the first five categories with higher sums of frequencies are picked out to represent that specific cluster. 
+
+#The Principal Component Analysis (PCA) and Hierarchical Clustering
+
+```{r,warning=FALSE, echo=FALSE}
+social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
+socialmarketing=filter(social_marketing, social_marketing$spam == 0 & social_marketing$adult == 0)
+soc_market = socialmarketing[ , c(-1, -36, -37)]
+soc_market=soc_market/rowSums(soc_market)
+soc_markets=scale(soc_market, center = TRUE, scale = TRUE)
+
+pca1=prcomp(soc_market)
+pve1=100*pca1$sdev^2/sum(pca1$sdev^2)
+
+pca2=prcomp(soc_market, scale=TRUE)
+pve2=100*pca2$sdev^2/sum(pca2$sdev^2)
+
+soc_market2 = socialmarketing[ , c(-1, -36, -37)]
+pca3=prcomp(soc_market2, scale=TRUE)
+pve3=100*pca3$sdev^2/sum(pca3$sdev^2)
+
+PC=c(1:34)
+pvecombine=cbind.data.frame(PC, pve1, pve2, pve3)
+ggplot(data=pvecombine)+
+  geom_line(aes(x=PC,y=pve1), col="green2")+geom_point(aes(x=PC, y=pve1), col="green2", shape=2, size=2)+
+  geom_line(aes(x=PC,y=pve2), col="lightblue")+geom_point(aes(x=PC, y=pve2), col="lightblue", shape=2, size=2)+
+  geom_line(aes(x=PC,y=pve3), col="pink")+geom_point(aes(x=PC, y=pve3), col="pink", shape=2, size=2)+
+  labs(y="PVE", x="Principal Component")+
+  theme_bw()+ labs(title = " PVE of PCA")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+A segmentation by PCA is performed by first scaling the data on PCA using three different scales. The proportion of variance of each principal component is calculated after performing PCA on each different scale. The figure above shows how PVE of each scale varies with each principal component, where the green line corresponds to the first scale, the light blue line corresponds to the second scale, and the pink one corresponds to the third scale. Based on the location of elbow in the figure the first ten principal components were chosen,which is a representative number of the data. 
+
+```{r ,  warning=FALSE, echo=FALSE}
+social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
+socialmarketing=filter(social_marketing, social_marketing$spam == 0 & social_marketing$adult == 0)
+soc_market = socialmarketing[ , c(-1, -36, -37)]
+soc_market=soc_market/rowSums(soc_market)
+soc_markets=scale(soc_market, center = TRUE, scale = TRUE)
+
+pca1=prcomp(soc_market)
+pve1=100*pca1$sdev^2/sum(pca1$sdev^2)
+
+sum_pca1=data.frame(summary(pca1)$importance)
+sum_pca1=sum_pca1[ , 1:11]
+kable(sum_pca1, caption ="Variations in Principal Components", format_caption = c("italic", "underline")) %>%
+  kable_styling(bootstrap_options = "basic", full_width = F)
+
+```
 
 
+Each component is used to differentiate the consumers. 
 
+```{r,  warning=FALSE, echo=FALSE}
+social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
+socialmarketing=filter(social_marketing, social_marketing$spam == 0 & social_marketing$adult == 0)
+soc_market = socialmarketing[ , c(-1, -36, -37)]
+soc_market=soc_market/rowSums(soc_market)
+soc_markets=scale(soc_market, center = TRUE, scale = TRUE)
 
+pca1=prcomp(soc_market)
+pca1_loading=pca1$rotation[ , c(1:11)]
+
+pc=data.frame(rep(1:34))
+for (i in c(1:11)){
+  sort=data.frame(sort(pca1_loading[,i], decreasing = TRUE))
+  rownames=data.frame(row.names(sort))
+  c=cbind(rownames, sort[,1])
+  pc=cbind(pc,c)
+}
+pc=pc[,-1]
+colnames(pc)=c("Categories", "PC1", "Categories", "PC2", "Categories", "PC3", "Categories", "PC4", "Categories", "PC5",
+               "Categories", "PC6", "Categories", "PC7", "Categories", "PC8", "Categories", "PC9", "Categories", "PC10")
+
+tablePCA=pc[1:5,-c(seq(1, 10, by=1))]
+
+colnames(tablePCA)=c("Pri_Com 1", "Pri_Com 2", "Pri_Com 3", "Pri_Com 4", "Pri_Com 5","Pri_Com 6","Pri_Com 7", "Pri_Com 8", "Pri_Com 9", "Pri_Com 10")
+
+rownames(tablePCA)=c("Category 1", "Category 2", "Category 3", "Category 4", "Category 5")
+kable(tablePCA,  caption ="Principal Components", format_caption = c("italic", "underline")) %>%
+  kable_styling(bootstrap_options = "basic", full_width = T)
+```
+
+Problem with the above result is that we are not certain who the consumers are and which ones have an interest in which cluster.To solve this problem, the scores of PCA can be used to construct a distance matrix, which measures the distance between each pair of consumers in the data. By Hierarchical Clustering and cutting we are able to obtain 10 clusters of consumers, in accordance with the value of K in K-means. The Hierarchical Clustering with K-means finds out a hierarchical structure of categories based on the proximity matrix of correlations between each pair of categories. Below you find the Dendogram of Hierarchical Clustering.
+
+```{r, warning=FALSE, echo=FALSE}
+social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
+socialmarketing=filter(social_marketing, social_marketing$spam == 0 & social_marketing$adult == 0)
+soc_market = socialmarketing[ , c(-1, -36, -37)]
+soc_market=soc_market/rowSums(soc_market)
+soc_markets=scale(soc_market, center = TRUE, scale = TRUE)
+
+soc_markets_corr=cor(soc_markets)
+d_soc_marketscorr=dist(soc_markets_corr)
+
+correl_hc1=hclust(d_soc_marketscorr, method = "complete")
+plot(correl_hc1, cex=1, xlab="", sub="", main="Dendrogram of Hierarchical Clustering")
+```
+
+To conclude, there exists one to one mapping between ten clusters of categories and ten clusters of consumers. Moreover, the  distribution of the numbers of consumers over ten clusters is extremely close. By comparing the number of consumers we can link the clusters in any of the three tables. The stable clustering structures across different approaches proves that our ten clusters are very robust based on our data. The largest cluster of the customers of NurientH20 is the one focusing on health and workout. The second largest is the online socializing and shopping.
