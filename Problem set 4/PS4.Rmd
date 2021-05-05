@@ -1,0 +1,212 @@
+---
+title: "4th Problem Set"
+author: "Fjolle Gjonbalaj"
+date: "07/05/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
+library(foreach)
+library(data.table)
+```
+
+# Problem 1: Clustering and PCA
+
+This problem compares unsupervised learning methods like Principal Component Analysis and K-means clustering to find out whether or not they can successfully distinguish the red wine from the white wine, as well as sorting the higher from the lower quality of wine based on the dataset with 11 chemical properties (or suitable transformations thereof) of 6500 different bottles of vinho verde wine from northern Portugal. 
+
+# Unsupervised learning methods to distinguish red wine from white wine
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+w1 <- qplot(x = color, y = fixed.acidity, geom = "boxplot", data = wine)
+w2 <- qplot(x = color, y = volatile.acidity, geom = "boxplot", data = wine)
+w3 <- qplot(x = color, y = citric.acid, geom = "boxplot", data = wine)
+w4 <- qplot(x = color, y = residual.sugar, geom = "boxplot", data = wine)
+w5 <- qplot(x = color, y = chlorides, geom = "boxplot", data = wine)
+w6 <- qplot(x = color, y = free.sulfur.dioxide, geom = "boxplot", data = wine)
+w7 <- qplot(x = color, y = total.sulfur.dioxide, geom = "boxplot", data = wine)
+w8 <- qplot(x = color, y = density, geom = "boxplot", data = wine)
+w9 <- qplot(x = color, y = pH, geom = "boxplot", data = wine)
+w10 <- qplot(x = color, y = sulphates, geom = "boxplot", data = wine)
+w11 <- qplot(x = color, y = alcohol, geom = "boxplot", data = wine)
+w12 <- qplot(x = color, y = quality, geom = "boxplot", data = wine)
+grid.arrange(w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, nrow = 2, top =
+               "Chemical properties of wine based on the color of wine")
+```
+
+The boxplots show that red and white wine are distinct from one-another when it comes to the chemical components such as total sulfur dioxide, residual sugar, volatile acidity and fixed acidity. I use these features in order to analyze the performance of the selected methods.In the figure with boxplots the wine colors are not very different in the other chemical features. As such, a visual graphic is chosen to show  the performance of K-means clustering on the selected chemical features. 
+
+# K-means clustering
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+# Centering and scaling the data
+center = wine[,(1:11)]
+center = scale(center, center=TRUE, scale=TRUE)
+mu = attr(center,"scaled:center")
+sigma = attr(center,"scaled:scale")
+set.seed(1)
+ClusterWine = kmeans(center, 2, nstart=25)
+w1.1 <- qplot(fixed.acidity, residual.sugar , data=wine, color=factor(ClusterWine$cluster))
+w1.2 <- qplot(fixed.acidity, residual.sugar , data=wine, color=factor(wine$color))
+grid.arrange(w1.1, w1.2, nrow = 2, top = "K-means clustering by wine color according to each element")
+w1.3 <- qplot(total.sulfur.dioxide, volatile.acidity, data=wine, color=factor(ClusterWine$cluster))
+w1.4 <- qplot(total.sulfur.dioxide, volatile.acidity, data=wine, color=factor(wine$color))
+grid.arrange(w1.3, w1.4, nrow = 2, top = "K-means clustering by wine color")
+```
+
+
+The above figures are a visual representation of the K-means clustering, and how the latter is able to successfully differentiate the colors of wine with respect to the chemical properties.
+
+# Prinicipal Components Analysis (PCA) by wine colors
+
+Principal Components Analysis performs in a similar manner to distinguish wine by the color. The table below displays that the first five principal components explain the cumulative variation in the data. 
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+Wine_PCA = prcomp(center, scale=TRUE)
+sum_Wine_PCA=data.frame(summary(Wine_PCA)$importance)
+sum_Wine_PCA=sum_Wine_PCA[ , 1:11]
+kable(sum_Wine_PCA, caption="PCA by wine colors", format_caption = c("italic", "underline"), booktabs=TRUE) %>%
+  kable_styling(bootstrap_options = "basic", full_width = T)
+plot(Wine_PCA, main = "Variance according to the principal components", xlab='Principal Components', color="lightblue")
+loadings = Wine_PCA$rotation
+```
+
+
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+rotation_Wine_PCA=data.frame(round(Wine_PCA$rotation[,1:5],2))
+kable(rotation_Wine_PCA, caption="Loadings of the first five Principal Components", format_caption = c("italic", "underline")) %>%
+  kable_styling(bootstrap_options = "basic", full_width = F)
+```
+
+The loadings for the first five principal components are the linear combinations of the original chemical properties. For instance, free sulfur dioxide and total sulfur dioxide are strongly positively correlated with the first principal component, whereas volatile acidity and sulfate are strongly and negatively correlated with the first principal component.
+
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+scores = Wine_PCA$x
+qplot(scores[,1], scores[,2], color=wine$color, xlab='Component 1', ylab='Component 2', main = "PCA for wine colors based on the first two principal components")
+```
+
+The plot above shows that PCA can also perform the clustering based on the type of wine. It can be seen that white wine generally clusters around positive values in the dimension of the first principal component(although not always), whereas red wine generally clusters around the negative values. The K-means clustering on the first five principal components can be used to check whether or not we can improve the partitioning of wine color based on K-means. This can be successfully performed by augmenting the K-means clustering. 
+
+```{r ,echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+WinePCAclust = kmeans(scores[,1:5], 2, nstart=20)
+w3.1 <- qplot(fixed.acidity, residual.sugar , data=wine, color=factor(WinePCAclust$cluster))
+w3.2 <- qplot(fixed.acidity, residual.sugar , data=wine, color=factor(wine$color))
+grid.arrange(w3.1, w3.2, nrow = 2, top = "K-means clustering PCA for wine color
+based on total sulfur dioxide and volatile acidity.")  
+```
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+With_Bet = rbind("Within-cluster SS of Basic clustering " = ClusterWine$withbet, 
+                 "Within-cluster SS of Clustering based PCA " = WinePCAclust$withbet, 
+                 "Between-cluster SS of Basic clustering " = ClusterWine$between, 
+                 "Between-cluster SS of Clustering based PCA " = WinePCAclust$between)
+kable(With_Bet, caption="In-sample fit of two clusters")
+```
+
+It can be shown that both PCA and K-means can successfully make the difference when it comes to the color of the wine using unsupervised learning on chemical properties. However, by first reducing the dimensions of the features by PCA and then implementing K-means would result in the colors being even better differentiated. This results in reduced within-cluster sum of squares. 
+
+## Unsupervised learning on the quality of wine
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+ggplot(wine)+
+  geom_bar(aes(x = quality, fill = color, binwidth = 1))+
+             labs(title = " Wine quality")
+```
+
+The above figure shows that there are 7 different qualities of wines that the data contains. We can further define the higher-quality wine as wine that takes a score higher than 7;The medium-quality wine takes a value somewhere between 4 and 7; whereas the lower quality wine takes a score of lower than 4. We can then further explore which chemical components of wine quality are the most different among each other.
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+wine$qualityindicator <- ifelse(wine$quality <= 4, 'low', ifelse(wine$quality <= 7, 'medium', 'high'))
+wine_quality1 <- qplot(x = qualityindicator, y = citric.acid, data = wine, geom = "boxplot")
+wine_quality2 <- qplot(x = qualityindicator, y = volatile.acidity, data = wine, geom = "boxplot")
+wine_quality3 <- qplot(x = qualityindicator, y = citric.acid, data = wine, geom = "boxplot")
+wine_quality4 <- qplot(x = qualityindicator, y = residual.sugar, data = wine, geom = "boxplot")
+wine_quality5 <- qplot(x = qualityindicator, y = chlorides, data = wine, geom = "boxplot")
+wine_quality6 <- qplot(x = qualityindicator, y = free.sulfur.dioxide, data = wine, geom = "boxplot")
+wine_quality7 <- qplot(x = qualityindicator, y = total.sulfur.dioxide, data = wine, geom = "boxplot")
+wine_quality8 <- qplot(x = qualityindicator, y = density, data = wine, geom = "boxplot")
+wine_quality9 <- qplot(x = qualityindicator, y = pH, data = wine, geom = "boxplot")
+wine_quality10 <- qplot(x = qualityindicator, y = sulphates, data = wine, geom = "boxplot")
+wine_quality11 <- qplot(x = qualityindicator, y = alcohol, data = wine, geom = "boxplot")
+grid.arrange(wine_quality1, wine_quality2, wine_quality3, wine_quality4, wine_quality5, wine_quality6, wine_quality7, wine_quality8, wine_quality9, wine_quality10, wine_quality11, nrow = 3, top = "Chemical properties among three wine quality levels")
+```
+
+It is seen in the boxplots above that higher and lower quality wine are the ones that vary the most based on the chemical component.
+
+# K-means clustering on the quality levels of wine
+
+```{r, echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+wine$qualityindicator <- ifelse(wine$quality <= 4, 'low', ifelse(wine$quality <= 7, 'medium', 'high'))
+set.seed(5)
+c = kmeans(center, 3, nstart=20)
+wine_quality1.1 <- qplot(alcohol, volatile.acidity,  data=wine, color=factor(c$cluster), alpha=I(0.5))
+wine_quality1.2 <- ggplot(wine, aes(x=alcohol, y = volatile.acidity, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high", "medium")))
+wine_quality1.8 <- ggplot(wine, aes(x=alcohol, y = volatile.acidity, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high")))
+wine_quality1.5 <- ggplot(wine, aes(free.sulfur.dioxide, chlorides))+
+  geom_point(aes(color=factor(c$cluster),alpha = I(0.3)))
+wine_quality1.6 <- ggplot(wine, aes(x=free.sulfur.dioxide, y = chlorides, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high","medium")))
+wine_quality1.10 <- ggplot(wine, aes(x=free.sulfur.dioxide, y = chlorides, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high")))
+grid.arrange(wine_quality1.1, wine_quality1.5, wine_quality1.2, wine_quality1.6, wine_quality1.8, wine_quality1.10, nrow = 3, top = "K-means clustering for wine quality.")
+```
+
+# Prinicipal Components Analysis (PCA) on higher and lower quality wine
+
+```{r , echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+wine$qualityindicator <- ifelse(wine$quality <= 4, 'low', ifelse(wine$quality <= 7, 'medium', 'high'))
+pca_wine_quality = prcomp(center, scale=TRUE)
+scores2 = pca_wine_quality$x
+qplot(scores2[,1], scores2[,2], color=wine$qualityindicator, xlab='1st Component', ylab='2nd Component', main = "PCA for wine quality on principal components", alpha=I(0.5))
+```
+
+It is observed from the plot above that higher quality wine generally cluster to the right of the principal components, while the lower quality wine generally cluster to the left of them.
+
+```{r ,echo = FALSE, warning=FALSE}
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+wine$qualityindicator <- ifelse(wine$quality <= 4, 'low', ifelse(wine$quality <= 7, 'medium', 'high'))
+set.seed(5)
+pc = kmeans(scores2[,1:5], 3, nstart=20)
+wine_quality1.11 <- qplot(alcohol, volatile.acidity,  data=wine, color=factor(pc$cluster), alpha=I(0.5))
+wine_quality1.12 <- ggplot(wine, aes(x=alcohol, y = volatile.acidity, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high", "medium")))
+wine_quality1.18 <- ggplot(wine, aes(x=alcohol, y = volatile.acidity, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high")))
+wine_quality1.15 <- ggplot(wine, aes(free.sulfur.dioxide, chlorides))+
+  geom_point(aes(color=factor(pc$cluster),alpha = I(0.5)))
+wine_quality1.16 <- ggplot(wine, aes(x=free.sulfur.dioxide, y = chlorides, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high","medium")))
+wine_quality1.110 <- ggplot(wine, aes(x=free.sulfur.dioxide, y = chlorides, color=qualityindicator, alpha = I(0.5)))+
+  geom_point(data = subset(wine, qualityindicator %in% c("low","high")))
+grid.arrange(wine_quality1.11, wine_quality1.15, wine_quality1.12, wine_quality1.16, wine_quality1.18, wine_quality1.110, nrow = 3, top = "K-means clustering from PCA for wine quality")
+```
+
+K-means clustering on the first five principal components is used to check whether or not partitioning of wine quality according to K-means can be improved upon. The figure above shows how k-means clustering partitions the data into three clusters in the dimensions of volatile acidity and alcohol. The middle left plot shows how the three wine quality levels are different in these dimensions. It can be difficult to observe the difference between the lower and higher quality wine due to a large number of middle quality wine that overlap.
+To conclude, neither K-means clustering nor PCA successfully differentiate the higher from the lower quality wines using only unsupervised learning contained on chemical properties of wine. Nevertheless, reducing the dimensions of the features by PCA and then applying K-means clustering could make the successful distinction on the quality levels of wine which could be observed from the reduced within-cluster sum of squares. Hence, K-means clustering together with PCA on the chemical components of wine work more successfully to differentiate between wine color than when we compare them based on the wine quality. 
+
+
+
+
+
+
