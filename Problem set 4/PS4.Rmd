@@ -15,6 +15,9 @@ library(gridExtra)
 library(kableExtra)
 library(foreach)
 library(data.table)
+library(tidyverse)
+library(arules)
+library(arulesViz)
 ```
 
 # Question 1: Clustering and PCA
@@ -47,7 +50,6 @@ The boxplots show that red and white wine are distinct from one-another when it 
 
 ```{r , echo = FALSE, warning=FALSE}
 wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
-# Centering and scaling the data
 center = wine[,(1:11)]
 center = scale(center, center=TRUE, scale=TRUE)
 mu = attr(center,"scaled:center")
@@ -120,7 +122,7 @@ kable(With_Bet, caption="In-sample fit of two clusters")
 
 It can be shown that both PCA and K-means can successfully make the difference when it comes to the color of the wine using unsupervised learning on chemical properties. However, by first reducing the dimensions of the features by PCA and then implementing K-means would result in the colors being even better differentiated. This results in reduced within-cluster sum of squares. 
 
-## Unsupervised learning on the quality of wine
+# Unsupervised learning on the quality of wine
 
 ```{r , echo = FALSE, warning=FALSE}
 wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
@@ -206,7 +208,7 @@ K-means clustering on the first five principal components is used to check wheth
 To conclude, neither K-means clustering nor PCA successfully differentiate the higher from the lower quality wines using only unsupervised learning contained on chemical properties of wine. Nevertheless, reducing the dimensions of the features by PCA and then applying K-means clustering could make the successful distinction on the quality levels of wine which could be observed from the reduced within-cluster sum of squares. Hence, K-means clustering together with PCA on the chemical components of wine work more successfully to differentiate between wine color than when we compare them based on the wine quality. 
 
 
-#Question 2:  Market segmentation
+# Question 2:  Market segmentation
 
 # K-means
 
@@ -232,7 +234,7 @@ mar=c(4,5,3,3),omi=c(0.75,0,0,0))
 
 The figure above shows the elbow plot. It is not clear from the graph what the appropriate elbow is.
 
-### The Result of K-means
+# Result from K-means
 
 ```{r ,  warning=FALSE, echo=FALSE}
 social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
@@ -267,7 +269,7 @@ kable(table_kmeans, caption ="Clusters of K-means" ,format_caption = c("bold", "
 
 K-means gave stable clusters of consumers. For each cluster, the sum of frequencies for each category over all consumers in that cluster is calculated. After ordering the categories by sums of frequencies, the first five categories with higher sums of frequencies are picked out to represent that specific cluster. 
 
-#The Principal Component Analysis (PCA) and Hierarchical Clustering
+# Principal Component Analysis and Hierarchical Clustering
 
 ```{r,warning=FALSE, echo=FALSE}
 social_marketing=read.csv('https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv')
@@ -313,7 +315,6 @@ sum_pca1=data.frame(summary(pca1)$importance)
 sum_pca1=sum_pca1[ , 1:11]
 kable(sum_pca1, caption ="Variations in Principal Components", format_caption = c("italic", "underline")) %>%
   kable_styling(bootstrap_options = "basic", full_width = F)
-
 ```
 
 
@@ -366,3 +367,98 @@ plot(correl_hc1, cex=1, xlab="", sub="", main="Dendrogram of Hierarchical Cluste
 ```
 
 To conclude, there exists one to one mapping between ten clusters of categories and ten clusters of consumers. Moreover, the  distribution of the numbers of consumers over ten clusters is extremely close. By comparing the number of consumers we can link the clusters in any of the three tables. The stable clustering structures across different approaches proves that our ten clusters are very robust based on our data. The largest cluster of the customers of NurientH20 is the one focusing on health and workout. The second largest is the online socializing and shopping.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# QUESTION 3: Association rules for grocery purchases
+
+```{r, warning=FALSE, echo=FALSE}
+grocery = read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/groceries.txt", header = FALSE)
+
+grocery$ID = seq.int(nrow(grocery))
+grocery <- cbind(grocery[,5], stack(lapply(grocery[,1:4], as.character)))[1:2]
+colnames(grocery) <- c("ID","items")
+grocery <- grocery[order(grocery$ID),]
+grocery <- grocery[!(grocery$items==""),]
+row.names(grocery) <- 1:nrow(grocery)
+grocery$ID = factor(grocery$ID)
+grocery_list = split(x=grocery$items, f=grocery$ID)
+grocery_list = lapply(grocery_list, unique)
+grocery_trans = as(grocery_list, "transactions")
+```
+
+Among the associated rules computed, I narrow down the rules into subsets according to confidence, lift and support. 
+
+```{r, include=FALSE, warning=FALSE, echo=FALSE}
+rule = apriori(grocery_trans, 
+parameter=list(support=.02, confidence=.1, maxlen=4))
+inspect(rule)
+```
+
+A strong association between “whole milk” and “other vegetables,” is observed. This is perhaps due to  them generally being considered staple goods. 
+
+```{r, warning=FALSE, echo=FALSE}
+inspect(subset(rule, confidence > 0.2))
+```
+
+```{r, echo=FALSE}
+inspect(subset(rule, support > 0.4))
+```
+
+A low level of support chosen was driven by the fact that there weren’t too many different grocery items within the dataset.
+
+In general the rules generated were based on the intuition that, say, that if a customer buys root vegetables he/she is also more likely to buy other vegetables. When it comes to the intuition, lift might be the most informative measure. This is because it measures the conditional probability of purchasing item set A given that you already purchased item set B. Therefore, while lift takes into consideration statistical dependence, confidence and support do not. 
+
+```{r, warning=FALSE, echo=FALSE}
+inspect(subset(rule, lift > 3))
+```
+
+Finding the 10“best” associations.
+
+```{r, warning=FALSE, echo=FALSE}
+inspect(subset(rule, lift > 3, confidence > 0.2, support > 0.4))
+```
+
+```{r, warning=FALSE, echo=FALSE}
+inspect(subset(rule, confidence > 0.6))
+subset1 = subset(rule, subset=confidence > 0.01 & support > 0.005)
+summary(subset1)
+```
+
+
+```{r, warning=FALSE, echo=FALSE}
+plot(subset1, method='graph')
+```
+
+The association can be vizualized through a network graph. The larger the label, the more frequent the transaction. "Whole milk," and "other vegetables" seem to tie together most transactions. 
+
+```{r, warning=FALSE, echo=FALSE}
+plot(head(subset1, 120, by='lift'), method='graph')
+```
+
+
+QUESTION 4: Author attribution
+
+
+Revisit the Reuters C50 corpus that we explored in class. Your task is to build the best model you can, using any combination of tools you see fit, for predicting the author of an article on the basis of that article's textual content. Describe clearly what model you are using, how you constructed features, and so forth. Yes, this is a supervised learning task, but it potentially draws on a lot of what you know about unsupervised learning, since engineering features for a document might involve unsupervised dimensionality reduction techniques.
+
+In the C50train directory, you have 50 articles from each of 50 different authors (one author per directory). Use this training data (and this data alone) to build the model. Then apply your model to predict the authorship of the articles in the C50test directory, which is about the same size as the training set. Describe your data pre-processing and analysis pipeline in detail.
+
+Note: you will need to figure out a way to deal with words in the test set that you never saw in the training set. This is a nontrivial aspect of the modeling exercise. You might, for example, consider adding a pseudo-word to the training set vocabulary, corresponding to "word not seen before," and add a pseudo-count to it so it doesn't look like these out-of-vocabulary words have zero probability on the testing set. Or you might simply ignore those new words, at a possible cost in performance.
+
+This question will be graded according to two criteria:
+  
+  the clarity of your description. We will be asking ourselves: could your analysis be reproduced by a competent data scientist based on what you've said? (That's good.) Or would that person have to wade into the code in order to understand what, precisely, you've done? (That's bad.)
+the test-set performance of your best model, versus the best model that your instructors can build using tools we have learned in class.
