@@ -9,6 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+#loading the data and the libraries
 library(tidyverse)
 library(ggplot2)
 library(gridExtra)
@@ -18,6 +19,15 @@ library(data.table)
 library(tidyverse)
 library(arules)
 library(arulesViz)
+
+
+library(tidyverse)
+library(tm)
+library(gamlr)
+library(glmnet)
+library(SnowballC)
+library(slam)
+library(proxy)
 ```
 
 # Question 1: Clustering and PCA
@@ -28,20 +38,21 @@ This problem compares unsupervised learning methods like Principal Component Ana
 
 ```{r , echo = FALSE, warning=FALSE}
 wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
-w1 <- qplot(x = color, y = fixed.acidity, geom = "boxplot", data = wine)
-w2 <- qplot(x = color, y = volatile.acidity, geom = "boxplot", data = wine)
-w3 <- qplot(x = color, y = citric.acid, geom = "boxplot", data = wine)
-w4 <- qplot(x = color, y = residual.sugar, geom = "boxplot", data = wine)
-w5 <- qplot(x = color, y = chlorides, geom = "boxplot", data = wine)
-w6 <- qplot(x = color, y = free.sulfur.dioxide, geom = "boxplot", data = wine)
-w7 <- qplot(x = color, y = total.sulfur.dioxide, geom = "boxplot", data = wine)
-w8 <- qplot(x = color, y = density, geom = "boxplot", data = wine)
-w9 <- qplot(x = color, y = pH, geom = "boxplot", data = wine)
-w10 <- qplot(x = color, y = sulphates, geom = "boxplot", data = wine)
-w11 <- qplot(x = color, y = alcohol, geom = "boxplot", data = wine)
-w12 <- qplot(x = color, y = quality, geom = "boxplot", data = wine)
-grid.arrange(w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, nrow = 2, top =
-               "Chemical properties of wine based on the color of wine")
+wine1=qplot(x = color, y = fixed.acidity, geom = "boxplot", data = wine)
+wine2=qplot(x = color, y = volatile.acidity, geom = "boxplot", data = wine)
+wine3=qplot(x = color, y = citric.acid, geom = "boxplot", data = wine)
+wine4=qplot(x = color, y = residual.sugar, geom = "boxplot", data = wine)
+wine5=qplot(x = color, y = chlorides, geom = "boxplot", data = wine)
+wine6=qplot(x = color, y = free.sulfur.dioxide, geom = "boxplot", data = wine)
+wine7=qplot(x = color, y = total.sulfur.dioxide, geom = "boxplot", data = wine)
+wine8=qplot(x = color, y = density, geom = "boxplot", data = wine)
+wine9=qplot(x = color, y = pH, geom = "boxplot", data = wine)
+wine10=qplot(x = color, y = sulphates, geom = "boxplot", data = wine)
+wine11=qplot(x = color, y = alcohol, geom = "boxplot", data = wine)
+wine12=qplot(x = color, y = quality, geom = "boxplot", data = wine)
+grid.arrange(wine1, wine2, wine3, wine4, wine5, wine6, wine7, wine8, wine9,
+             wine10, wine11, wine12, nrow = 4, 
+             top ="Chemical properties of wine based on the color of wine")
 ```
 
 The boxplots show that red and white wine are distinct from one-another when it comes to the chemical components such as total sulfur dioxide, residual sugar, volatile acidity and fixed acidity. I use these features in order to analyze the performance of the selected methods.In the figure with boxplots the wine colors are not very different in the other chemical features. As such, a visual graphic is chosen to show  the performance of K-means clustering on the selected chemical features. 
@@ -56,12 +67,10 @@ mu = attr(center,"scaled:center")
 sigma = attr(center,"scaled:scale")
 set.seed(1)
 ClusterWine = kmeans(center, 2, nstart=25)
-w1.1 <- qplot(fixed.acidity, residual.sugar , data=wine, color=factor(ClusterWine$cluster))
-w1.2 <- qplot(fixed.acidity, residual.sugar , data=wine, color=factor(wine$color))
-grid.arrange(w1.1, w1.2, nrow = 2, top = "K-means clustering by wine color according to each element")
-w1.3 <- qplot(total.sulfur.dioxide, volatile.acidity, data=wine, color=factor(ClusterWine$cluster))
-w1.4 <- qplot(total.sulfur.dioxide, volatile.acidity, data=wine, color=factor(wine$color))
-grid.arrange(w1.3, w1.4, nrow = 2, top = "K-means clustering by wine color")
+qplot(fixed.acidity, residual.sugar , data=wine, color=factor(ClusterWine$cluster))
+qplot(fixed.acidity, residual.sugar , data=wine, color=factor(wine$color))
+qplot(total.sulfur.dioxide, volatile.acidity, data=wine, color=factor(ClusterWine$cluster))
+qplot(total.sulfur.dioxide, volatile.acidity, data=wine, color=factor(wine$color))
 ```
 
 
@@ -372,93 +381,196 @@ To conclude, there exists one to one mapping between ten clusters of categories 
 
 
 
-
-
-
-
-
-
-
-
-
-
 # QUESTION 3: Association rules for grocery purchases
 
+`
 ```{r, warning=FALSE, echo=FALSE}
-grocery = read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/groceries.txt", header = FALSE)
-
-grocery$ID = seq.int(nrow(grocery))
-grocery <- cbind(grocery[,5], stack(lapply(grocery[,1:4], as.character)))[1:2]
-colnames(grocery) <- c("ID","items")
-grocery <- grocery[order(grocery$ID),]
-grocery <- grocery[!(grocery$items==""),]
-row.names(grocery) <- 1:nrow(grocery)
-grocery$ID = factor(grocery$ID)
-grocery_list = split(x=grocery$items, f=grocery$ID)
-grocery_list = lapply(grocery_list, unique)
-grocery_trans = as(grocery_list, "transactions")
+library(tidyverse)
+library(arules) 
+library(arulesViz)
+groceries = read.delim("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/groceries.txt", header = FALSE)
+groceries = as.data.frame(groceries)
 ```
 
 Among the associated rules computed, I narrow down the rules into subsets according to confidence, lift and support. 
 
-```{r, include=FALSE, warning=FALSE, echo=FALSE}
-rule = apriori(grocery_trans, 
-parameter=list(support=.02, confidence=.1, maxlen=4))
-inspect(rule)
+```{r , warning=FALSE, echo=FALSE}
+lists <- strsplit(groceries$V1, split = ",")
+all_lists <- lapply(lists, unique)
+groceries_trans = as(all_lists, "transactions")
+grocery_rules = apriori(groceries_trans, 
+	parameter=list(support=.001, confidence=.2, maxlen=1))
 ```
+
+```{r, warning=FALSE, echo=FALSE}                         
+arules::inspect(grocery_rules)
+arules::inspect(subset(grocery_rules, lift > 1))
+arules::inspect(subset(grocery_rules, confidence > 0.23))
+arules::inspect(subset(grocery_rules, lift > 1 & confidence > 0.04))
+plot(grocery_rules)
+grocrules_2 = apriori(groceries_trans, 
+parameter=list(support=0.002, confidence=0.8, minlen=1))
+arules::inspect(grocrules_2)
+plot(grocrules_2)
+plot(head(grocrules_2, 5, by='lift'), method='graph')
+```
+
+
+The association can be vizualized through a network graph. The larger the label, the more frequent the transaction. "Whole milk," and "other vegetables" seem to tie together most transactions. 
 
 A strong association between “whole milk” and “other vegetables,” is observed. This is perhaps due to  them generally being considered staple goods. 
-
-```{r, warning=FALSE, echo=FALSE}
-inspect(subset(rule, confidence > 0.2))
-```
-
-```{r, echo=FALSE}
-inspect(subset(rule, support > 0.4))
-```
 
 A low level of support chosen was driven by the fact that there weren’t too many different grocery items within the dataset.
 
 In general the rules generated were based on the intuition that, say, that if a customer buys root vegetables he/she is also more likely to buy other vegetables. When it comes to the intuition, lift might be the most informative measure. This is because it measures the conditional probability of purchasing item set A given that you already purchased item set B. Therefore, while lift takes into consideration statistical dependence, confidence and support do not. 
 
-```{r, warning=FALSE, echo=FALSE}
-inspect(subset(rule, lift > 3))
+
+The chosen confidence is 80%, support rate is 2% and the minimum lift is 1. This enables for the realization of any association between different grocery baskets. 
+
+
+
+
+# QUESTION 4: Author attribution
+
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+readerPlain = function(fname){
+				readPlain(elem=list(content=readLines(fname)), 
+							id=fname, language='en') }
+train_direct = Sys.glob('C:/Users/Fjolla/Documents/GitHub/ECO395M/data/ReutersC50/C50train/*')
+train_direct = train_direct[c(1:50)]
+file_list = NULL
+labels_train = NULL
+for(author in train_direct) {
+	author_name = substring(author, first=1)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels_train = append(labels_train, rep(author_name, length(files_to_add)))
+}
+train_direct
+corpus_train = Corpus(DirSource(train_direct)) 
+corpus_train = corpus_train %>% tm_map(., content_transformer(tolower)) %>% 
+        tm_map(., content_transformer(removeNumbers)) %>% 
+				tm_map(., content_transformer(removeNumbers)) %>% 
+				tm_map(., content_transformer(removePunctuation)) %>%
+				tm_map(., content_transformer(stripWhitespace)) %>%
+				tm_map(., content_transformer(removeWords), stopwords("SMART"))
+
 ```
 
-Finding the 10“best” associations.
 
-```{r, warning=FALSE, echo=FALSE}
-inspect(subset(rule, lift > 3, confidence > 0.2, support > 0.4))
+```{r}
+TermMatrix_train = DocumentTermMatrix(corpus_train)
+TermMatrix_train 
+TermMatrix_train2 = removeSparseTerms(TermMatrix_train, 0.95)
+TermMatrix_train2
+DF_train <- data.frame(as.matrix(TermMatrix_train2), stringsAsFactors=FALSE)
+labels_train = append(labels_train, rep(author_name, length(files_to_add)))
+#Cleaning label names
+Author_name = labels_train %>%
+	{ strsplit(., '/', fixed=TRUE) } %>%
+	{ lapply(., tail, n=2) } %>%
+	{ lapply(., paste0, collapse = '') } %>%
+	unlist
+Author_name = as.data.frame(Author_name)
+Author_name = gsub("C([0-9]+)train", "\\1", Author_name$Author_name)
+Author_name = gsub("([0-9]+)", "", Author_name)
+Author_name = as.data.frame(Author_name)
 ```
 
-```{r, warning=FALSE, echo=FALSE}
-inspect(subset(rule, confidence > 0.6))
-subset1 = subset(rule, subset=confidence > 0.01 & support > 0.005)
-summary(subset1)
+```{r echo=FALSE, warning=FALSE}
+test_direct = Sys.glob('C:/Users/Fjolla/Documents/GitHub/ECO395M/data/ReutersC50/C50test/*')
+test_direct = test_direct[c(1: 50)]
+file_list = NULL
+labels_test = NULL
+for(author in test_direct) {
+	author_name = substring(author, first=1)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels_test = append(labels_test, rep(author_name, length(files_to_add)))
+}
+test_direct
+corpus_test = Corpus(DirSource(test_direct)) 
+corpus_test = corpus_test %>% tm_map(., content_transformer(tolower)) %>% 
+				tm_map(., content_transformer(removeNumbers)) %>% 
+				tm_map(., content_transformer(removePunctuation)) %>%
+				tm_map(., content_transformer(stripWhitespace)) %>%
+				tm_map(., content_transformer(removeWords), stopwords("SMART")) 
+TermMatrix_test = DocumentTermMatrix(corpus_test,
+                               control = list(dictionary=Terms(TermMatrix_train)))
+TermMatrix_test2 = removeSparseTerms(TermMatrix_test, 0.95)
+TermMatrix_test2
+DF_test <- data.frame(as.matrix(TermMatrix_test2), stringsAsFactors=FALSE)
+TermMatrix_test = DocumentTermMatrix(corpus_test,
+                               control = list(dictionary=Terms(TermMatrix_train)))
+#outcome vector
+train_y = Author_name
+test_y = Author_name
+train_y = as.data.frame(train_y)
+```
+
+The PCA dimension reduction technique is used in order to reduce the data from a large number of features into smaller principal properties. 
+
+```{r echo=FALSE, warning=FALSE}
+df_train1<-DF_train[,which(colSums(DF_train) != 0)] 
+df_test1<-DF_test[,which(colSums(DF_test) != 0)]
+df_train1 = df_train1[,intersect(colnames(df_test1),colnames(df_train1))]
+df_test1 = df_test1[,intersect(colnames(df_test1),colnames(df_train1))]
+mod_pca = prcomp(df_train1,scale=TRUE)
+pred_pca=predict(mod_pca,newdata = df_test1)
+plot(mod_pca,type='line') 
+plot(mod_pca)
+var <- apply(mod_pca$x, 2, var)  
+prop <- var / sum(var)
+cumsum(prop)
+plot(cumsum(mod_pca$sdev^2/sum(mod_pca$sdev^2)))
+summary(mod_pca) 
+```
+
+The same procedure is repeated for the test data. 
+
+```{r echo=FALSE, warning=FALSE}
+train_class = data.frame(mod_pca$x[,1:200])
+train_class['author']=Author_name
+train_load = mod_pca$rotation[,1:200]
+test_class_pre <- scale(df_test1) %*% train_load
+test_class <- as.data.frame(test_class_pre)
+test_class['author']=labels_test
 ```
 
 
-```{r, warning=FALSE, echo=FALSE}
-plot(subset1, method='graph')
+Using supervised learning techniques such as predictive models using Random Forest and KNN, the below results are obtainted. 
+
+```{r}
+##Random Forest
+library(randomForest)
+train_class_forest = train_class 
+train_class_forest$author = factor(train_class_forest$author) 
+randomFor = randomForest(author ~ . ,
+                           data=train_class_forest, importance = TRUE)
+predict_random<-predict(randomFor,data=test_class)
+random_table<-as.data.frame(table(predict_random,as.factor(test_class$author)))
+predicted<-predict_random
+actual<-as.factor(test_class$author)
+temp<-as.data.frame(cbind(actual,predicted))
+temp$flag<-ifelse(temp$actual==temp$predicted,1,0)
+sum(temp$flag)
+sum(temp$flag)*100/2500
 ```
 
-The association can be vizualized through a network graph. The larger the label, the more frequent the transaction. "Whole milk," and "other vegetables" seem to tie together most transactions. 
 
-```{r, warning=FALSE, echo=FALSE}
-plot(head(subset1, 120, by='lift'), method='graph')
+```{r echo=FALSE, warning=FALSE}
+trainX = subset(train_class, select = -c(author))
+testX = subset(test_class,select=-c(author))
+train.author=as.factor(train_class$author)
+test.author=as.factor(test_class$author)
 ```
 
 
-QUESTION 4: Author attribution
+```{r}
+comp<-data.frame("Model"=c("Random Forest","KNN"), "Test.accuracy"=c(70.8,19.1))
+comp
+ggplot(comp,aes(x=Model,y=Test.accuracy))+geom_col()
+```
 
-
-Revisit the Reuters C50 corpus that we explored in class. Your task is to build the best model you can, using any combination of tools you see fit, for predicting the author of an article on the basis of that article's textual content. Describe clearly what model you are using, how you constructed features, and so forth. Yes, this is a supervised learning task, but it potentially draws on a lot of what you know about unsupervised learning, since engineering features for a document might involve unsupervised dimensionality reduction techniques.
-
-In the C50train directory, you have 50 articles from each of 50 different authors (one author per directory). Use this training data (and this data alone) to build the model. Then apply your model to predict the authorship of the articles in the C50test directory, which is about the same size as the training set. Describe your data pre-processing and analysis pipeline in detail.
-
-Note: you will need to figure out a way to deal with words in the test set that you never saw in the training set. This is a nontrivial aspect of the modeling exercise. You might, for example, consider adding a pseudo-word to the training set vocabulary, corresponding to "word not seen before," and add a pseudo-count to it so it doesn't look like these out-of-vocabulary words have zero probability on the testing set. Or you might simply ignore those new words, at a possible cost in performance.
-
-This question will be graded according to two criteria:
-  
-  the clarity of your description. We will be asking ourselves: could your analysis be reproduced by a competent data scientist based on what you've said? (That's good.) Or would that person have to wade into the code in order to understand what, precisely, you've done? (That's bad.)
-the test-set performance of your best model, versus the best model that your instructors can build using tools we have learned in class.
+It is clear from the results that the Random Forest technique performs significantly better than the KNN method by around 39%.
