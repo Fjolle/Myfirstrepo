@@ -433,7 +433,7 @@ The chosen confidence is 80%, support rate is 2% and the minimum lift is 1. This
 # QUESTION 4: Author attribution
 
 
-```{r echo=FALSE, warning=FALSE, include=FALSE}
+```{r ,echo=FALSE, warning=FALSE, include=FALSE}
 readerPlain = function(fname){
 				readPlain(elem=list(content=readLines(fname)), 
 							id=fname, language='en') }
@@ -459,7 +459,7 @@ corpus_train = corpus_train %>% tm_map(., content_transformer(tolower)) %>%
 ```
 
 
-```{r}
+```{r,echo=FALSE, warning=FALSE}
 TermMatrix_train = DocumentTermMatrix(corpus_train)
 TermMatrix_train 
 TermMatrix_train2 = removeSparseTerms(TermMatrix_train, 0.95)
@@ -478,7 +478,7 @@ Author_name = gsub("([0-9]+)", "", Author_name)
 Author_name = as.data.frame(Author_name)
 ```
 
-```{r echo=FALSE, warning=FALSE}
+```{r ,echo=FALSE, warning=FALSE, include=FALSE}
 test_direct = Sys.glob('C:/Users/Fjolla/Documents/GitHub/ECO395M/data/ReutersC50/C50test/*')
 test_direct = test_direct[c(1: 50)]
 file_list = NULL
@@ -511,7 +511,7 @@ train_y = as.data.frame(train_y)
 
 The PCA dimension reduction technique is used in order to reduce the data from a large number of features into smaller principal properties. 
 
-```{r echo=FALSE, warning=FALSE}
+```{r,echo=FALSE, warning=FALSE}
 df_train1<-DF_train[,which(colSums(DF_train) != 0)] 
 df_test1<-DF_test[,which(colSums(DF_test) != 0)]
 df_train1 = df_train1[,intersect(colnames(df_test1),colnames(df_train1))]
@@ -522,14 +522,12 @@ plot(mod_pca,type='line')
 plot(mod_pca)
 var <- apply(mod_pca$x, 2, var)  
 prop <- var / sum(var)
-cumsum(prop)
 plot(cumsum(mod_pca$sdev^2/sum(mod_pca$sdev^2)))
-summary(mod_pca) 
 ```
 
 The same procedure is repeated for the test data. 
 
-```{r echo=FALSE, warning=FALSE}
+```{r ,echo=FALSE, warning=FALSE}
 train_class = data.frame(mod_pca$x[,1:200])
 train_class['author']=Author_name
 train_load = mod_pca$rotation[,1:200]
@@ -541,7 +539,7 @@ test_class['author']=labels_test
 
 Using supervised learning techniques such as predictive models using Random Forest and KNN, the below results are obtainted. 
 
-```{r}
+```{r,echo=FALSE, warning=FALSE}
 ##Random Forest
 library(randomForest)
 train_class_forest = train_class 
@@ -559,7 +557,7 @@ sum(temp$flag)*100/2500
 ```
 
 
-```{r echo=FALSE, warning=FALSE}
+```{r,echo=FALSE, warning=FALSE}
 trainX = subset(train_class, select = -c(author))
 testX = subset(test_class,select=-c(author))
 train.author=as.factor(train_class$author)
@@ -567,7 +565,7 @@ test.author=as.factor(test_class$author)
 ```
 
 
-```{r}
+```{r,echo=FALSE, warning=FALSE}
 comp<-data.frame("Model"=c("Random Forest","KNN"), "Test.accuracy"=c(70.8,19.1))
 comp
 ggplot(comp,aes(x=Model,y=Test.accuracy))+geom_col()
